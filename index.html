@@ -83,6 +83,10 @@ nav button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent
 .proj{display:flex;flex-direction:column;gap:6px;padding:14px 0;border-bottom:1px solid var(--line)}
 .proj h3{font:600 1.05rem var(--display);margin:0;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .proj h3 small{font:400 .8rem var(--body);color:var(--muted)}
+.proj .ph{cursor:pointer;user-select:none}
+.proj .chev{display:inline-block;width:1em;color:var(--muted);transition:transform .15s}
+.proj.open .chev{transform:rotate(90deg)}
+.proj .peek{font-size:.88rem;color:var(--muted);margin:0 0 0 1.5em;overflow-wrap:anywhere}
 .over{color:var(--danger);font-weight:600}
 .due{font:500 .82rem var(--mono);color:var(--muted)}
 .empty{color:var(--muted);padding:14px 4px}
@@ -434,6 +438,7 @@ function scheduleEditor(){
       }));
   });
 }
+let OPENP=new Set();try{OPENP=new Set(JSON.parse(localStorage.getItem("tee-openp")||"[]"))}catch(e){}
 function viewProjects(){
   if(S.loaded&&!S.tasks.length)return [h("div",{class:"card"},h("p",{class:"hint"},"No tasks yet. Load the starter list from your plan?"),h("p",{},h("button",{class:"primary",onclick:e=>{e.target.disabled=true;A.seed()}},"Load my starter tasks")))];
   const pn=h("input",{type:"text",id:"np-name",placeholder:"Project name",required:true});
@@ -450,12 +455,15 @@ function viewProjects(){
     const list=tasksOf(p), open=list.filter(t=>!t.done), done=list.filter(t=>t.done), n=open[0];
     const inp=h("input",{type:"text",id:"add-"+p,placeholder:"Add a task","aria-label":"Add task to "+PROJECTS[p].name});
     const used=[1,2,3,4,5].some(d=>SCHED[d].blocks.some(b=>b.p===p&&b.kind!=="flex"));
-    return h("section",{class:"proj"},
-      h("h3",{},PROJECTS[p].name,PROJECTS[p].note?h("small",{},PROJECTS[p].note):null,h("small",{},`${open.length} open · ${done.length} done`),
+    const isOpen=OPENP.has(p);
+    const toggle=()=>{isOpen?OPENP.delete(p):OPENP.add(p);try{localStorage.setItem("tee-openp",JSON.stringify([...OPENP]))}catch(e){};render()};
+    return h("section",{class:"proj"+(isOpen?" open":"")},
+      h("h3",{class:"ph",role:"button",tabindex:"0","aria-expanded":String(isOpen),onclick:toggle,onkeydown:e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle()}}},h("span",{class:"chev","aria-hidden":"true"},"▸"),PROJECTS[p].name,PROJECTS[p].note?h("small",{},PROJECTS[p].note):null,h("small",{},`${open.length} open · ${done.length} done`),
         !used&&p!=="job"?h("small",{class:"over"},"not scheduled"):null,
-        p!=="job"?h("button",{class:"ghost",style:"margin-left:auto",title:"Archive project",onclick:e=>{
+        p!=="job"?h("button",{class:"ghost",style:"margin-left:auto",title:"Archive project",onclick:e=>{e.stopPropagation();
           if(e.target.dataset.armed){A.archiveProject(p)}else{e.target.dataset.armed="1";e.target.textContent="Confirm archive"}}},"Archive"):null),
-      h("div",{class:"list"},open.length?open.map((t,i)=>h("div",{class:`item${t===n?" isnext":""}`},
+      !isOpen?(n?h("p",{class:"peek"},"▶ "+n.text):null):null,
+      !isOpen?null:h("div",{class:"list"},open.length?open.map((t,i)=>h("div",{class:`item${t===n?" isnext":""}`},
         h("input",{type:"checkbox",id:"c-"+t.id,"aria-label":"Mark done",onchange:()=>A.toggle(t)}),
         h("label",{class:"txt",for:"c-"+t.id},t.text),
         h("span",{class:"acts"},
@@ -463,7 +471,7 @@ function viewProjects(){
           h("button",{class:"ghost","aria-label":"Move up",disabled:i===0||null,onclick:()=>A.move(t,-1)},"↑"),
           h("button",{class:"ghost","aria-label":"Move down",disabled:i===open.length-1||null,onclick:()=>A.move(t,1)},"↓"),
           h("button",{class:"ghost","aria-label":"Delete task",onclick:()=>A.delTask(t)},"✕")))):h("p",{class:"empty"},"No open tasks.")),
-      h("form",{class:"add",onsubmit:e=>{e.preventDefault();const v=inp.value.trim();if(v){A.addTask(p,v);inp.value=""}}},inp,h("button",{type:"submit"},"Add")));
+      !isOpen?null:h("form",{class:"add",onsubmit:e=>{e.preventDefault();const v=inp.value.trim();if(v){A.addTask(p,v);inp.value=""}}},inp,h("button",{type:"submit"},"Add")));
   }),archCard];
 }
 function viewInbox(){
