@@ -51,3 +51,19 @@ create policy own_rows on public.someday for all to authenticated using (auth.ui
 
 -- Live sync between phone and laptop.
 alter publication supabase_realtime add table public.tasks, public.inbox, public.waiting, public.someday;
+
+-- Custom block times per weekday, and one-off changes / swaps for a single date.
+alter table public.days add column if not exists times jsonb not null default '{}'::jsonb;
+create table if not exists public.day_overrides (
+  user_id uuid not null default auth.uid() references auth.users on delete cascade,
+  date date not null,
+  theme text,
+  slots jsonb,
+  times jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  primary key (user_id, date)
+);
+alter table public.day_overrides enable row level security;
+drop policy if exists own_rows on public.day_overrides;
+create policy own_rows on public.day_overrides for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+alter publication supabase_realtime add table public.day_overrides;

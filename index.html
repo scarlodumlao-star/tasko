@@ -46,7 +46,7 @@ button.primary{background:var(--accent);color:var(--accent-ink);border-color:var
 button.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:4px 8px}
 button.ghost:hover{color:var(--ink)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-input[type=text],input[type=email],input[type=password],input[type=date],select{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0}
+input[type=text],input[type=email],input[type=password],input[type=date],input[type=time],select{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0}
 .now{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px}
 .now .row{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
 .label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
@@ -104,6 +104,13 @@ nav button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent
 .chips button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
 .chips small{font-size:.7rem;opacity:.8;margin-left:4px}
 .dayhead2{font:600 1.05rem var(--display);margin:4px 0 6px}
+.dayrow{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.tag{font:600 .68rem var(--body);text-transform:uppercase;letter-spacing:.05em;color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+.times{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 14px;margin-top:6px}
+.times label{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:.88rem;color:var(--muted)}
+.edrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 4px;border-bottom:1px solid var(--line)}
+.edrow .nm{flex:1 1 140px;min-width:0}
+.swap{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .weekwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 table.week{border-collapse:collapse;min-width:640px;width:100%;font-size:.85rem}
 table.week th,table.week td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
@@ -180,32 +187,64 @@ const DEFAULT_DAYS=[
   {dow:4,theme:"Vive Manila day",slots:[{project:"vive",label:"Vive Manila relaunch planning"},{project:"vive",label:"Vive Manila Website"},{project:"vive",label:"Vive Manila marketing"}]},
   {dow:5,theme:"Learn & Coaching day",slots:[{project:"anthropic",label:"Anthropic Training"},{project:"coaching",label:"Golf Coaching Curriculum"},{project:"anthropic",label:"Flex",flex:true}]}
 ];
+// Every day has the same nine blocks; their start times (and the day's end) can be changed per weekday,
+// and any single date this week can be changed or swapped via a row in `day_overrides`.
+const BLOCK_DEFS=[
+  {key:"plan",label:"Plan the day",kind:"ritual",note:"Check Inbox and Waiting. Read today's blocks."},
+  {key:"job",label:"Job Search",p:"job"},
+  {key:"brk1",label:"Break",kind:"rest"},
+  {key:"s0",slot:0},
+  {key:"lunch",label:"Lunch",kind:"rest"},
+  {key:"s1",slot:1},
+  {key:"brk2",label:"Break",kind:"rest"},
+  {key:"s2",slot:2},
+  {key:"wrap"}
+];
+const DEFAULT_TIMES={plan:"09:00",job:"09:15",brk1:"10:45",s0:"11:00",lunch:"12:00",s1:"13:00",brk2:"15:00",s2:"15:15",wrap:"16:30",end:"17:00"};
+const TIME_KEYS=[...BLOCK_DEFS.map(b=>b.key),"end"];
+const TIME_LABELS={plan:"Plan the day",job:"Job Search",brk1:"Break",s0:"Block 1",lunch:"Lunch",s1:"Block 2",brk2:"Break",s2:"Block 3",wrap:"Wrap-up",end:"Day ends"};
 const SLOT_TIMES=["11:00","13:00","15:15"];
-const END=17*60;
-let PROJECTS={}, ORDER=[], SCHED={};
-function buildDay(theme,slots,dow){
-  const s=i=>slots[i]||{project:"",label:"Open block"};
-  const blk=(t,i)=>({t,label:s(i).label||PROJECTS[s(i).project]?.name||"Open block",p:s(i).project||null,kind:s(i).flex?"flex":undefined,slot:i});
-  return {theme,blocks:[
-    {t:"09:00",label:"Plan the day",kind:"ritual",note:"Check Inbox and Waiting. Read today's blocks."},
-    {t:"09:15",label:"Job Search",p:"job"},
-    {t:"10:45",label:"Break",kind:"rest"},
-    blk("11:00",0),
-    {t:"12:00",label:"Lunch",kind:"rest"},
-    blk("13:00",1),
-    {t:"15:00",label:"Break",kind:"rest"},
-    blk("15:15",2),
-    dow===5?{t:"16:30",label:"Weekly Review",kind:"review"}
-       :{t:"16:30",label:"Log done / set next",kind:"ritual",note:"Process the Inbox. Tick what's done."}
-  ]};
+let PROJECTS={}, ORDER=[], SCHED={}, BASE={}, WEEK={}, WEEK_KEY="";
+function tmin(s){const [h,m]=String(s||"0:0").split(":").map(Number);return h*60+m}
+function timesOk(T){let prev=-1;for(const k of TIME_KEYS){const m=tmin(T[k]);if(!(m>prev))return false;prev=m}return true}
+function buildDay(theme,slots,dow,times,base){
+  const T={...DEFAULT_TIMES,...(times||{})};
+  const s=i=>(slots||[])[i]||{project:"",label:"Open block"};
+  const blocks=BLOCK_DEFS.map(d=>{
+    let b;
+    if(d.slot!=null){const x=s(d.slot);b={label:x.label||PROJECTS[x.project]?.name||"Open block",p:x.project||null,kind:x.flex?"flex":undefined,slot:d.slot}}
+    else if(d.key==="wrap")b=dow===5?{label:"Weekly Review",kind:"review"}:{label:"Log done / set next",kind:"ritual",note:"Process the Inbox. Tick what's done."};
+    else b={label:d.label,kind:d.kind,p:d.p,note:d.note};
+    b.key=d.key;b.t=T[d.key];
+    if(base){const o=base.blocks.find(x=>x.key===d.key);if(o&&(o.t!==b.t||o.label!==b.label||o.p!==b.p||o.kind!==b.kind))b.changed=true}
+    return b;
+  });
+  const day={theme,blocks,times:T,end:tmin(T.end)};
+  day.changed=!!base&&(theme!==base.theme||day.end!==base.end||blocks.some(b=>b.changed));
+  return day;
 }
-function rebuild(projects,days){
+// Mon–Fri dates of the current week (on a weekend: the coming week).
+function weekDates(t=manila()){
+  const [y,m,d]=t.ymd.split("-").map(Number), base=Date.UTC(y,m-1,d), off=t.dow===0?1:t.dow===6?2:1-t.dow, W={};
+  for(let i=1;i<=5;i++)W[i]=new Date(base+(off+i-1)*864e5).toISOString().slice(0,10);
+  return W;
+}
+const baseRow=dow=>S.days.find(d=>d.dow===dow)||DEFAULT_DAYS.find(d=>d.dow===dow);
+const overOf=dow=>(S.over||[]).find(o=>o.date===WEEK[dow]);
+function effRow(dow){const b=baseRow(dow),o=overOf(dow);return {theme:o?.theme??b.theme,slots:o?.slots??b.slots??[],times:{...(b.times||{}),...(o?.times||{})}}}
+function rebuild(projects,days,overrides){
   PROJECTS={};for(const p of projects)PROJECTS[p.key]={name:p.name,note:p.note,active:p.active,sort:p.sort};
   ORDER=projects.filter(p=>p.active).sort((a,b)=>a.sort-b.sort).map(p=>p.key);
-  SCHED={};for(const d of days)SCHED[d.dow]=buildDay(d.theme,d.slots||[],d.dow);
-  for(const d of DEFAULT_DAYS)if(!SCHED[d.dow])SCHED[d.dow]=buildDay(d.theme,d.slots,d.dow);
+  WEEK=weekDates();WEEK_KEY=WEEK[1];
+  BASE={};SCHED={};
+  for(let dow=1;dow<=5;dow++){
+    const r=days.find(d=>d.dow===dow)||DEFAULT_DAYS.find(d=>d.dow===dow);
+    BASE[dow]=buildDay(r.theme,r.slots||[],dow,r.times);
+    const o=(overrides||[]).find(x=>x.date===WEEK[dow]);
+    SCHED[dow]=o?buildDay(o.theme??r.theme,o.slots??r.slots??[],dow,{...(r.times||{}),...(o.times||{})},BASE[dow]):BASE[dow];
+  }
 }
-rebuild(DEFAULT_PROJECTS,DEFAULT_DAYS);
+rebuild(DEFAULT_PROJECTS,DEFAULT_DAYS,[]);
 const DOW=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const toMin=s=>{const [h,m]=s.split(":").map(Number);return h*60+m};
 const fmt=m=>{const h=Math.floor(m/60),mm=m%60;return (((h+11)%12)+1)+":"+String(mm).padStart(2,"0")};
@@ -213,13 +252,13 @@ function manila(d=new Date()){
   const p={};for(const x of new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Manila",weekday:"short",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(d))p[x.type]=x.value;
   return {dow:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(p.weekday),mins:+p.hour*60+ +p.minute,secs:+p.second,ymd:`${p.year}-${p.month}-${p.day}`};
 }
-function withEnds(blocks){return blocks.map((b,i)=>({...b,start:toMin(b.t),end:i<blocks.length-1?toMin(blocks[i+1].t):END,i}))}
+function withEnds(blocks,end){return blocks.map((b,i)=>({...b,start:toMin(b.t),end:i<blocks.length-1?toMin(blocks[i+1].t):end,i}))}
 function blockState(t=manila()){
   const s=SCHED[t.dow];
   if(!s)return {weekend:true};
-  const bl=withEnds(s.blocks);
+  const bl=withEnds(s.blocks,s.end);
   if(t.mins<bl[0].start)return {sched:s,bl,before:true,next:bl[0]};
-  if(t.mins>=END)return {sched:s,bl,after:true};
+  if(t.mins>=s.end)return {sched:s,bl,after:true};
   const cur=bl.find(b=>t.mins>=b.start&&t.mins<b.end);
   return {sched:s,bl,cur,next:bl[cur.i+1]};
 }
@@ -228,8 +267,8 @@ function blockState(t=manila()){
 const CFG=window.TEE_CONFIG||{};
 const configured=CFG.SUPABASE_URL&&!CFG.SUPABASE_URL.includes("YOUR-")&&window.supabase;
 const sb=configured?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true}}):null;
-const S={tasks:[],inbox:[],waiting:[],someday:[],projects:[],days:[],loaded:false};
-let seeding=false, editSched=false;
+const S={tasks:[],inbox:[],waiting:[],someday:[],projects:[],days:[],over:[],loaded:false};
+let seeding=false, editSched=false, editDay=null;
 let session=null, tab="today", chime=false, lastBlockKey=null, switchMsg="";
 try{tab=localStorage.getItem("tee-tab")||"today";chime=localStorage.getItem("tee-chime")==="1"}catch(e){}
 
@@ -254,7 +293,7 @@ const maxOrd=p=>tasksOf(p).reduce((m,t)=>Math.max(m,t.ord||0),0);
 /* ---------- data ---------- */
 async function load(){
   if(!sb||!session)return;
-  const [t,i,w,s,p,d]=await Promise.all([...["tasks","inbox","waiting","someday","projects"].map(n=>sb.from(n).select("*").order("created_at")),sb.from("days").select("*").order("dow")]);
+  const [t,i,w,s,p,d,ov]=await Promise.all([...["tasks","inbox","waiting","someday","projects"].map(n=>sb.from(n).select("*").order("created_at")),sb.from("days").select("*").order("dow"),sb.from("day_overrides").select("*").gte("date",weekDates()[1])]);
   const err=[t,i,w,s,p,d].find(r=>r.error);
   if(err){toast(navigator.onLine?"Couldn't load tasks: "+err.error.message:"You're offline. Showing the last loaded tasks.");return}
   // A brand-new account gets the default projects and schedule.
@@ -263,8 +302,8 @@ async function load(){
     if(!d.data.length)await sb.from("days").insert(DEFAULT_DAYS);
     seeding=false;return load();
   }
-  S.tasks=t.data;S.inbox=i.data;S.waiting=w.data;S.someday=s.data;S.projects=p.data;S.days=d.data;S.loaded=true;
-  rebuild(S.projects,S.days);
+  S.tasks=t.data;S.inbox=i.data;S.waiting=w.data;S.someday=s.data;S.projects=p.data;S.days=d.data;S.over=ov.error?[]:ov.data;S.loaded=true;
+  rebuild(S.projects,S.days,S.over);
   safeRender();
 }
 let loadTimer=null;
@@ -307,7 +346,12 @@ const A={
   },
   archiveProject:key=>run(sb.from("projects").update({active:false}).eq("key",key)),
   restoreProject:key=>run(sb.from("projects").update({active:true}).eq("key",key)),
-  saveDay:(dow,patch)=>run(sb.from("days").upsert({user_id:session.user.id,dow,theme:SCHED[dow]?.theme||"",slots:(S.days.find(d=>d.dow===dow)||{}).slots||[],...patch})),
+  saveDay:(dow,patch)=>{const r=baseRow(dow);return run(sb.from("days").upsert({user_id:session.user.id,dow,theme:r.theme||"",slots:r.slots||[],times:r.times||{},...patch}))},
+  saveOver:(dow,patch)=>run(sb.from("day_overrides").upsert({user_id:session.user.id,date:WEEK[dow],...effRow(dow),...patch})),
+  clearOver:dow=>run(sb.from("day_overrides").delete().eq("date",WEEK[dow])),
+  swapDays:(a,b)=>{const ea=effRow(a),eb=effRow(b),u=session.user.id;
+    return run(sb.from("day_overrides").upsert([{user_id:u,date:WEEK[a],...eb},{user_id:u,date:WEEK[b],...ea}]))},
+  resetWeek:()=>run(sb.from("day_overrides").delete().in("date",Object.values(WEEK))),
   seed:async()=>{
     const rows=await fetch("seed.json").then(r=>r.json());
     if(await run(sb.from("tasks").insert(rows)))
@@ -381,7 +425,7 @@ function blocksList(bl,mins){
     const cur=mins>=b.start&&mins<b.end, past=mins>=b.end, n=b.p?nextOf(b.p):null;
     return h("div",{class:`block${cur?" cur":""}${past?" past":""}${b.kind==="rest"?" rest":""}`},
       h("div",{class:"tee"},fmt(b.start)),
-      h("div",{class:"b"},h("div",{class:"t"},b.label),
+      h("div",{class:"b"},h("div",{class:"t"},b.label,b.changed?h("span",{class:"tag"},"changed"):null),
         b.p&&b.kind!=="flex"?h("div",{class:"s"},n?"▶ "+n.text:"No open tasks"):null,
         b.kind==="flex"?h("div",{class:"s"},"Bumped work, errands, or Anthropic Training"):null));
   });
@@ -389,7 +433,7 @@ function blocksList(bl,mins){
 // The next workday after today (Mon–Fri).
 function nextWorkday(dow){let d=dow;do{d=(d+1)%7}while(!SCHED[d]);return d}
 // Default day shown: today during work hours, otherwise the next workday.
-function defaultDay(t=manila()){return SCHED[t.dow]&&t.mins<END?t.dow:nextWorkday(t.dow)}
+function defaultDay(t=manila()){return SCHED[t.dow]&&t.mins<SCHED[t.dow].end?t.dow:nextWorkday(t.dow)}
 let viewDay=null;
 function viewToday(){
   const t=manila(), d=viewDay??defaultDay(t), isToday=d===t.dow&&!!SCHED[t.dow];
@@ -398,28 +442,71 @@ function viewToday(){
     h("button",{"aria-pressed":String(n===d),onclick:()=>{viewDay=n;render()}},DOW[n].slice(0,3),
       n===t.dow&&SCHED[t.dow]?h("small",{},"today"):n===tomorrow?h("small",{},"next"):null)));
   const label=isToday?"Today":d===tomorrow?(tomorrow===(t.dow+1)%7?"Tomorrow":"Next workday"):DOW[d];
-  return [chips,h("div",{class:"dayhead2"},`${label} · ${DOW[d]} — ${SCHED[d].theme}`),
-    ...blocksList(withEnds(SCHED[d].blocks),isToday?t.mins:-1)];
+  const sd=SCHED[d], editing=editDay===d;
+  const head=h("div",{class:"dayrow"},
+    h("div",{class:"dayhead2"},`${label} · ${DOW[d]} — ${sd.theme}`,sd.changed?h("span",{class:"tag"},"changed"):null),
+    h("span",{class:"acts"},
+      sd.changed&&!editing?h("button",{class:"ghost",onclick:()=>A.clearOver(d)},"Reset to usual"):null,
+      h("button",{class:editing?"primary":"",onclick:()=>{editDay=editing?null:d;render()}},editing?"Done":"Change this day")));
+  if(editing)return [chips,head,...dayEditor(d)];
+  return [chips,head,...blocksList(withEnds(sd.blocks,sd.end),isToday?t.mins:-1)];
+}
+function slotSelect(id,s,onPick){
+  return h("select",{id,"aria-label":"Project for this block",onchange:e=>{
+      const v=e.target.value, n={...s};
+      if(v==="__flex"){n.flex=true;n.project="anthropic";n.label="Flex"}
+      else{delete n.flex;n.project=v;n.label=v?PROJECTS[v].name:""}
+      onPick(n);
+    }},
+    h("option",{value:""},"— Open block —"),
+    ORDER.filter(p=>p!=="job").map(p=>h("option",{value:p,selected:!s.flex&&s.project===p?true:null},PROJECTS[p].name)),
+    h("option",{value:"__flex",selected:s.flex?true:null},"Flex (bumped work / errands)"));
+}
+function timeInput(id,val,label,onSet){
+  return h("input",{type:"time",id,value:val,step:"300","aria-label":label,onchange:e=>{if(e.target.value)onSet(e.target.value)}});
+}
+function dayEditor(d){
+  const e=effRow(d), T={...DEFAULT_TIMES,...e.times}, slots=[0,1,2].map(i=>({...((e.slots||[])[i]||{project:"",label:""})}));
+  const setTime=(k,v)=>{const n={...T,[k]:v};if(!timesOk(n)){toast("Times must stay in order, earliest first.");render();return}A.saveOver(d,{times:n})};
+  const [y,m,dd]=WEEK[d].split("-").map(Number);
+  const when=new Date(Date.UTC(y,m-1,dd)).toLocaleDateString("en-US",{timeZone:"UTC",month:"short",day:"numeric"});
+  return [h("p",{class:"hint"},`Changes apply to ${DOW[d]}, ${when} only. Your usual week stays the same.`),
+    ...TIME_KEYS.map(k=>{
+      const def=BLOCK_DEFS.find(b=>b.key===k), b=SCHED[d].blocks.find(x=>x.key===k);
+      const name=def&&def.slot!=null
+        ?slotSelect(`od-${d}-${k}`,slots[def.slot],n=>{slots[def.slot]=n;A.saveOver(d,{slots})})
+        :h("span",{class:"t"},k==="end"?"Day ends":b.label);
+      return h("div",{class:"edrow"},timeInput(`ot-${d}-${k}`,T[k],`${TIME_LABELS[k]} start time`,v=>setTime(k,v)),h("div",{class:"nm"},name));
+    }),
+    overOf(d)?h("p",{style:"margin-top:10px"},h("button",{onclick:()=>{editDay=null;A.clearOver(d)}},"Reset to usual")):null];
 }
 function viewWeek(){
-  const t=manila(), days=[1,2,3,4,5], rows=SCHED[1].blocks.map((b,i)=>i);
+  const t=manila(), days=[1,2,3,4,5], rows=BLOCK_DEFS.map((b,i)=>i);
   const head=h("thead",{},h("tr",{},h("th",{},""),
-    days.map(d=>h("th",{class:d===t.dow?"today":null},DOW[d].slice(0,3),h("small",{},SCHED[d].theme.replace(" day",""))))));
+    days.map(d=>h("th",{class:d===t.dow?"today":null},DOW[d].slice(0,3),SCHED[d].changed?h("span",{class:"tag"},"changed"):null,h("small",{},SCHED[d].theme.replace(" day",""))))));
   const cell=(d,i)=>{
     const b=SCHED[d].blocks[i], n=b.p&&b.kind!=="flex"&&b.p!=="job"?nextOf(b.p):null;
     const cls=[d===t.dow?"today":"",b.kind==="rest"?"rest":""].join(" ").trim()||null;
-    return h("td",{class:cls},b.label,n?h("span",{class:"nt"},"▶ "+n.text):null);
+    const rowT=SCHED[1].blocks[i].t;
+    return h("td",{class:cls},b.label,b.t!==rowT?h("span",{class:"nt"},"at "+fmt(toMin(b.t))):null,n?h("span",{class:"nt"},"▶ "+n.text):null);
   };
   const body=h("tbody",{},rows.map(i=>h("tr",{},h("td",{class:"time"},fmt(toMin(SCHED[1].blocks[i].t))),days.map(d=>cell(d,i)))));
   const toggle=h("button",{class:editSched?"primary":"",onclick:()=>{editSched=!editSched;render()}},editSched?"Done editing":"Edit schedule");
-  if(editSched)return [h("div",{class:"acts",style:"justify-content:space-between;margin-bottom:8px"},h("span",{class:"hint"},"Job Search, breaks and the daily rituals stay fixed. Changes save as you go."),toggle),...scheduleEditor()];
-  return [h("div",{class:"acts",style:"justify-content:space-between;margin-bottom:8px"},h("span",{class:"hint"},"Each project block shows its current ▶ next task."),toggle),
+  if(editSched)return [h("div",{class:"acts",style:"justify-content:space-between;margin-bottom:8px"},h("span",{class:"hint"},"Your usual week. Changes repeat every week and save as you go. For one day only, use Change this day on the Day tab."),toggle),...scheduleEditor()];
+  const dsel=(id,v)=>h("select",{id,"aria-label":"Day"},days.map(d=>h("option",{value:d,selected:d===v?true:null},DOW[d].slice(0,3))));
+  const sa=dsel("swap-a",Math.max(1,Math.min(5,t.dow||1))), sbx=dsel("swap-b",Math.max(1,Math.min(5,t.dow||1))%5+1);
+  const anyChanged=days.some(d=>SCHED[d].changed);
+  const swap=h("div",{class:"swap"},h("span",{class:"hint"},"This week only: swap"),sa,h("span",{class:"hint"},"with"),sbx,
+    h("button",{onclick:()=>{const a=+sa.value,b=+sbx.value;if(a===b){toast("Pick two different days.");return}A.swapDays(a,b);toast(`Swapped ${DOW[a]} and ${DOW[b]} for this week.`)}},"Swap"),
+    anyChanged?h("button",{class:"ghost",onclick:()=>A.resetWeek()},"Reset this week"):null);
+  return [h("div",{class:"acts",style:"justify-content:space-between;margin-bottom:8px"},h("span",{class:"hint"},"Each project block shows its current ▶ next task."),toggle),swap,
     h("div",{class:"weekwrap"},h("table",{class:"week"},head,body))];
 }
 function scheduleEditor(){
   return [1,2,3,4,5].map(dow=>{
     const row=S.days.find(d=>d.dow===dow)||DEFAULT_DAYS.find(d=>d.dow===dow);
     const slots=[0,1,2].map(i=>({...(row.slots[i]||{project:"",label:""})}));
+    const T={...DEFAULT_TIMES,...(row.times||{})};
     const save=()=>A.saveDay(dow,{slots});
     const theme=h("input",{type:"text",id:"th-"+dow,value:row.theme,"aria-label":DOW[dow]+" theme",onchange:e=>A.saveDay(dow,{theme:e.target.value.trim()})});
     return h("section",{class:"proj"},
@@ -436,8 +523,11 @@ function scheduleEditor(){
           ORDER.filter(p=>p!=="job").map(p=>h("option",{value:p,selected:!s.flex&&s.project===p?true:null},PROJECTS[p].name)),
           h("option",{value:"__flex",selected:s.flex?true:null},"Flex (bumped work / errands)"));
         const lbl=h("input",{type:"text",id:`lb-${dow}-${i}`,value:s.label||"",placeholder:"Block label","aria-label":`${DOW[dow]} ${SLOT_TIMES[i]} label`,onchange:e=>{s.label=e.target.value.trim();save()}});
-        return h("div",{class:"item"},h("span",{class:"tee"},fmt(toMin(SLOT_TIMES[i]))),sel,lbl);
-      }));
+        return h("div",{class:"item"},h("span",{class:"tee"},fmt(toMin(T["s"+i]))),sel,lbl);
+      }),
+      h("details",{},h("summary",{class:"hint",style:"cursor:pointer"},"Block times"),
+        h("div",{class:"times"},TIME_KEYS.map(k=>h("label",{},TIME_LABELS[k],timeInput(`bt-${dow}-${k}`,T[k],`${DOW[dow]} ${TIME_LABELS[k]} time`,v=>{
+          const n={...T,[k]:v};if(!timesOk(n)){toast("Times must stay in order, earliest first.");render();return}A.saveDay(dow,{times:n})}))))));
   });
 }
 let OPENP=new Set();try{OPENP=new Set(JSON.parse(localStorage.getItem("tee-openp")||"[]"))}catch(e){}
@@ -456,7 +546,7 @@ function viewProjects(){
   return [newCard,...ORDER.map(p=>{
     const list=tasksOf(p), open=list.filter(t=>!t.done), done=list.filter(t=>t.done), n=open[0];
     const inp=h("input",{type:"text",id:"add-"+p,placeholder:"Add a task","aria-label":"Add task to "+PROJECTS[p].name});
-    const used=[1,2,3,4,5].some(d=>SCHED[d].blocks.some(b=>b.p===p&&b.kind!=="flex"));
+    const used=[1,2,3,4,5].some(d=>BASE[d].blocks.some(b=>b.p===p&&b.kind!=="flex"));
     const isOpen=OPENP.has(p);
     const toggle=()=>{isOpen?OPENP.delete(p):OPENP.add(p);try{localStorage.setItem("tee-openp",JSON.stringify([...OPENP]))}catch(e){};render()};
     return h("section",{class:"proj"+(isOpen?" open":"")},
@@ -566,6 +656,7 @@ function toggleMic(id,btn){
 /* ---------- tick ---------- */
 function tick(){
   if(!session){renderClock();return}
+  if(weekDates()[1]!==WEEK_KEY){rebuild(S.projects.length?S.projects:DEFAULT_PROJECTS,S.days,S.over);reload()}
   const st=blockState();
   const key=st.cur?st.cur.t:st.after?"after":st.before?"before":"wk";
   if(lastBlockKey&&key!==lastBlockKey&&st.cur){switchMsg=`Time to switch → ${st.cur.label}`;if(chime)beep()}
@@ -587,7 +678,7 @@ function showApp(){
   render();load();
   if(!channel){
     channel=sb.channel("tee-sheet");
-    for(const tbl of ["tasks","inbox","waiting","someday","projects","days"])channel.on("postgres_changes",{event:"*",schema:"public",table:tbl},reload);
+    for(const tbl of ["tasks","inbox","waiting","someday","projects","days","day_overrides"])channel.on("postgres_changes",{event:"*",schema:"public",table:tbl},reload);
     channel.subscribe();
   }
 }
