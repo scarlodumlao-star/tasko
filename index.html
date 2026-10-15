@@ -61,6 +61,8 @@ input[type=text],input[type=email],input[type=password],input[type=date],select{
 .switch{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 14px;font-weight:600}
 .capture,.add{display:flex;gap:8px}
 .capture input,.add input[type=text]{flex:1}
+.mic{padding:6px 10px;flex:none}
+.mic.on{background:var(--danger);color:#fff;border-color:var(--danger)}
 nav{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line)}
 nav button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--muted);padding:8px 10px;white-space:nowrap;font-weight:500}
 nav button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
@@ -471,7 +473,7 @@ function viewProjects(){
           h("button",{class:"ghost","aria-label":"Move up",disabled:i===0||null,onclick:()=>A.move(t,-1)},"↑"),
           h("button",{class:"ghost","aria-label":"Move down",disabled:i===open.length-1||null,onclick:()=>A.move(t,1)},"↓"),
           h("button",{class:"ghost","aria-label":"Delete task",onclick:()=>A.delTask(t)},"✕")))):h("p",{class:"empty"},"No open tasks.")),
-      !isOpen?null:h("form",{class:"add",onsubmit:e=>{e.preventDefault();const v=inp.value.trim();if(v){A.addTask(p,v);inp.value=""}}},inp,h("button",{type:"submit"},"Add")));
+      !isOpen?null:h("form",{class:"add",onsubmit:e=>{e.preventDefault();const v=inp.value.trim();if(v){A.addTask(p,v);inp.value=""}}},inp,micBtn("add-"+p),h("button",{type:"submit"},"Add")));
   }),archCard];
 }
 function viewInbox(){
@@ -500,14 +502,14 @@ function viewWaiting(){
         h("button",{onclick:()=>A.resolve(w)},"Resolved")));
   });
   return [rows.length?h("div",{class:"list"},rows):h("p",{class:"empty"},"Nothing blocked."),
-    h("form",{class:"add",style:"flex-wrap:wrap;margin-top:12px",onsubmit:e=>{e.preventDefault();const v=txt.value.trim();if(v){A.addWaiting(v,proj.value,date.value);txt.value="";date.value=""}}},txt,proj,date,h("button",{type:"submit"},"Add"))];
+    h("form",{class:"add",style:"flex-wrap:wrap;margin-top:12px",onsubmit:e=>{e.preventDefault();const v=txt.value.trim();if(v){A.addWaiting(v,proj.value,date.value);txt.value="";date.value=""}}},txt,micBtn("w-text"),proj,date,h("button",{type:"submit"},"Add"))];
 }
 function viewSomeday(){
   const inp=h("input",{type:"text",id:"s-text",placeholder:"New idea or project"});
   return [S.someday.length?h("div",{class:"list"},S.someday.map(s=>h("div",{class:"item"},h("div",{class:"txt"},s.text),
       h("span",{class:"acts"},projSelect("sp-"+s.id,"Make task in…",e=>{if(e.target.value)A.promote(s,e.target.value)}),
       h("button",{class:"ghost","aria-label":"Delete",onclick:()=>A.delSomeday(s)},"✕"))))):h("p",{class:"empty"},"No ideas parked yet. Promote them at the Friday review."),
-    h("form",{class:"add",style:"margin-top:12px",onsubmit:e=>{e.preventDefault();const v=inp.value.trim();if(v){A.addSomeday(v);inp.value=""}}},inp,h("button",{type:"submit"},"Add"))];
+    h("form",{class:"add",style:"margin-top:12px",onsubmit:e=>{e.preventDefault();const v=inp.value.trim();if(v){A.addSomeday(v);inp.value=""}}},inp,micBtn("s-text"),h("button",{type:"submit"},"Add"))];
 }
 function viewDone(){
   const cutoff=Date.now()-7*864e5;
@@ -530,9 +532,35 @@ function render(){
 }
 // Avoid wiping a half-typed entry when data refreshes.
 function safeRender(){
+  if(micRec){renderNow();renderTabs();return}
   const a=document.activeElement;
   if(a&&a.closest&&a.closest("#view")&&((a.tagName==="INPUT"&&a.value)||a.tagName==="SELECT")){renderNow();renderTabs();return}
   render();
+}
+
+/* ---------- voice dictation ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let micRec=null;
+function micBtn(id){
+  if(!SR)return null;
+  return h("button",{type:"button",class:"mic","aria-label":"Speak instead of typing",title:"Speak",onclick:e=>toggleMic(id,e.currentTarget)},"🎤");
+}
+function micReset(){document.querySelectorAll(".mic.on").forEach(b=>{b.classList.remove("on");b.textContent="🎤"})}
+function toggleMic(id,btn){
+  if(micRec){micRec.stop();return}
+  const el=document.getElementById(id);if(!el)return;
+  const base=el.value.trim()?el.value.trim()+" ":"";
+  const r=new SR();
+  r.lang=navigator.language||"en-US";r.interimResults=true;r.continuous=false;
+  r.onresult=ev=>{let t="";for(const x of ev.results)t+=x[0].transcript;const f=document.getElementById(id);if(f)f.value=base+t.trim()};
+  r.onerror=ev=>{
+    if(ev.error==="not-allowed"||ev.error==="service-not-allowed")toast("Allow microphone access to use voice.");
+    else if(ev.error==="no-speech")toast("Didn't catch that. Tap 🎤 and try again.");
+    else if(ev.error!=="aborted")toast("Voice isn't working right now. Type instead.");
+  };
+  r.onend=()=>{micRec=null;micReset();const f=document.getElementById(id);if(f){f.focus();safeRender()}};
+  micRec=r;btn.classList.add("on");btn.textContent="■";
+  try{r.start()}catch(e){micRec=null;micReset();toast("Voice isn't working right now. Type instead.")}
 }
 
 /* ---------- tick ---------- */
@@ -577,6 +605,7 @@ $("#signUpBtn").addEventListener("click",async()=>{
 });
 $("#signOutBtn").addEventListener("click",async()=>{await sb.auth.signOut()});
 
+{const cb=micBtn("captureText");if(cb)$("#captureText").after(cb)}
 $("#capture").addEventListener("submit",e=>{e.preventDefault();const i=$("#captureText"),v=i.value.trim();if(!v)return;A.capture(v);i.value="";toast("Captured to Inbox")});
 
 /* ---------- install ---------- */
