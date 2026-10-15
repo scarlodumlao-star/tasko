@@ -93,6 +93,20 @@ nav button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent
 .auth input{width:100%}
 .err{color:var(--danger);font-size:.9rem;margin:0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;max-width:calc(100% - 32px)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chips button{border-radius:999px;padding:4px 12px;font-size:.88rem}
+.chips button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.chips small{font-size:.7rem;opacity:.8;margin-left:4px}
+.dayhead2{font:600 1.05rem var(--display);margin:4px 0 6px}
+.weekwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table.week{border-collapse:collapse;min-width:640px;width:100%;font-size:.85rem}
+table.week th,table.week td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
+table.week th{font-weight:600}
+table.week th small{display:block;font-weight:400;color:var(--accent);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em}
+table.week td.time{font:500 .8rem var(--mono);color:var(--muted);white-space:nowrap}
+table.week td.rest{color:var(--muted)}
+table.week .today{background:var(--accent-soft)}
+table.week .nt{display:block;color:var(--muted);font-size:.78rem;margin-top:2px}
 footer{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;font-size:.85rem;color:var(--muted)}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -298,9 +312,12 @@ function renderNow(){
   const t=manila(), st=blockState(t), box=$("#now");
   box.replaceChildren();
   if(switchMsg)box.append(h("div",{class:"switch",role:"status"},switchMsg,"  ",h("button",{class:"ghost",onclick:()=>{switchMsg="";renderNow()}},"Got it")));
-  if(st.weekend){box.append(h("div",{class:"label"},"Now"),h("h2",{},"Weekend"),h("p",{class:"hint"},"No blocks. Next up: Monday 9:00 AM, Plan the day."));return}
-  if(st.before){box.append(h("div",{class:"label"},"Before work"),h("h2",{},"Day starts at 9:00 AM"),h("p",{class:"hint"},"First block: Plan the day."));return}
-  if(st.after){box.append(h("div",{class:"label"},"After hours"),h("h2",{},"Done for today"),h("p",{class:"hint"},"Errands go here. Capture anything new in the Inbox."));return}
+  // Outside work hours: preview the next workday's projects.
+  const preview=d=>{const ps=[...new Set(SCHED[d].blocks.filter(b=>b.p&&b.p!=="job"&&b.kind!=="flex").map(b=>b.p))];
+    return h("p",{class:"hint"},`${DOW[d]} — ${SCHED[d].theme}: Job Search, then ${ps.map(p=>PROJECTS[p].name).join(", ")}${SCHED[d].blocks.some(b=>b.kind==="flex")?", Flex":""}.`)};
+  if(st.weekend){box.append(h("div",{class:"label"},"Now"),h("h2",{},"Weekend"),preview(nextWorkday(t.dow)));return}
+  if(st.before){box.append(h("div",{class:"label"},"Before work"),h("h2",{},"Day starts at 9:00 AM"),preview(t.dow));return}
+  if(st.after){box.append(h("div",{class:"label"},"After hours"),h("h2",{},"Done for today"),h("p",{class:"hint"},"Errands go here. Capture anything new in the Inbox."),h("div",{class:"label"},"Next workday"),preview(nextWorkday(t.dow)));return}
   const c=st.cur, left=c.end-t.mins, pct=Math.min(100,((t.mins-c.start)*60+t.secs)/((c.end-c.start)*60)*100);
   box.append(
     h("div",{class:"row"},h("div",{class:"label"},`Now · ${fmt(c.start)}–${fmt(c.end)}`),h("div",{class:"left"},`${left} min left`)),
@@ -320,7 +337,7 @@ function renderNow(){
     h("button",{class:"ghost",onclick:()=>{chime=!chime;try{localStorage.setItem("tee-chime",chime?"1":"0")}catch(e){};if(chime)beep();renderNow()}},chime?"🔔 Chime on":"🔕 Turn on chime"),
     h("span",{class:"hint"},chime?"Plays at each switch while the app is open.":"")));
 }
-const TABS=[["today","Today"],["projects","Projects"],["inbox","Inbox"],["waiting","Waiting"],["someday","Someday"],["done","Done"]];
+const TABS=[["today","Day"],["week","Week"],["projects","Projects"],["inbox","Inbox"],["waiting","Waiting"],["someday","Someday"],["done","Done"]];
 function renderTabs(){
   const nav=$("#tabs");nav.replaceChildren();
   for(const [k,l] of TABS){
@@ -338,10 +355,33 @@ function blocksList(bl,mins){
         b.kind==="flex"?h("div",{class:"s"},"Bumped work, errands, or Anthropic Training"):null));
   });
 }
+// The next workday after today (Mon–Fri).
+function nextWorkday(dow){let d=dow;do{d=(d+1)%7}while(!SCHED[d]);return d}
+// Default day shown: today during work hours, otherwise the next workday.
+function defaultDay(t=manila()){return SCHED[t.dow]&&t.mins<END?t.dow:nextWorkday(t.dow)}
+let viewDay=null;
 function viewToday(){
-  const t=manila(), st=blockState(t);
-  if(st.weekend)return [h("p",{class:"empty"},"No blocks on weekends. Here's Monday:"),...blocksList(withEnds(SCHED[1].blocks),-1)];
-  return blocksList(st.bl,t.mins);
+  const t=manila(), d=viewDay??defaultDay(t), isToday=d===t.dow&&!!SCHED[t.dow];
+  const tomorrow=nextWorkday(t.dow);
+  const chips=h("div",{class:"chips",role:"group","aria-label":"Pick a day"},[1,2,3,4,5].map(n=>
+    h("button",{"aria-pressed":String(n===d),onclick:()=>{viewDay=n;render()}},DOW[n].slice(0,3),
+      n===t.dow&&SCHED[t.dow]?h("small",{},"today"):n===tomorrow?h("small",{},"next"):null)));
+  const label=isToday?"Today":d===tomorrow?(tomorrow===(t.dow+1)%7?"Tomorrow":"Next workday"):DOW[d];
+  return [chips,h("div",{class:"dayhead2"},`${label} · ${DOW[d]} — ${SCHED[d].theme}`),
+    ...blocksList(withEnds(SCHED[d].blocks),isToday?t.mins:-1)];
+}
+function viewWeek(){
+  const t=manila(), days=[1,2,3,4,5], rows=SCHED[1].blocks.map((b,i)=>i);
+  const head=h("thead",{},h("tr",{},h("th",{},""),
+    days.map(d=>h("th",{class:d===t.dow?"today":null},DOW[d].slice(0,3),h("small",{},SCHED[d].theme.replace(" day",""))))));
+  const cell=(d,i)=>{
+    const b=SCHED[d].blocks[i], n=b.p&&b.kind!=="flex"&&b.p!=="job"?nextOf(b.p):null;
+    const cls=[d===t.dow?"today":"",b.kind==="rest"?"rest":""].join(" ").trim()||null;
+    return h("td",{class:cls},b.label,n?h("span",{class:"nt"},"▶ "+n.text):null);
+  };
+  const body=h("tbody",{},rows.map(i=>h("tr",{},h("td",{class:"time"},fmt(toMin(SCHED[1].blocks[i].t))),days.map(d=>cell(d,i)))));
+  return [h("p",{class:"hint",style:"margin-bottom:8px"},"Each project block shows its current ▶ next task."),
+    h("div",{class:"weekwrap"},h("table",{class:"week"},head,body))];
 }
 function viewProjects(){
   if(S.loaded&&!S.tasks.length)return [h("div",{class:"card"},h("p",{class:"hint"},"No tasks yet. Load the starter list from your plan?"),h("p",{},h("button",{class:"primary",onclick:e=>{e.target.disabled=true;A.seed()}},"Load my starter tasks")))];
@@ -412,7 +452,7 @@ function render(){
   renderNow();renderTabs();
   const v=$("#view");v.replaceChildren();
   if(!S.loaded){v.append(h("p",{class:"empty"},"Loading your tasks…"));return}
-  const fn={today:viewToday,projects:viewProjects,inbox:viewInbox,waiting:viewWaiting,someday:viewSomeday,done:viewDone}[tab]||viewToday;
+  const fn={today:viewToday,week:viewWeek,projects:viewProjects,inbox:viewInbox,waiting:viewWaiting,someday:viewSomeday,done:viewDone}[tab]||viewToday;
   v.append(...[fn()].flat(2));
 }
 // Avoid wiping a half-typed entry when data refreshes.
