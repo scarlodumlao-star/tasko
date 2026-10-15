@@ -21,9 +21,6 @@ Carlo's Mon–Fri time-block planner. Installable app (PWA) for phone and laptop
 - **iPhone (Safari):** Share → Add to Home Screen.
 - **Android (Chrome):** menu → Install app / Add to Home screen.
 
-## Changing the schedule
-The weekly blocks live in the `SCHED` section near the top of the script in `index.html`.
-
 ## Projects and schedule
 Projects live in the `projects` table and each weekday's three project blocks (11:00, 1:00, 3:15) in the `days` table.
 - In the app: Projects → **+ New project**; Week → **Edit schedule**.
