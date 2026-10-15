@@ -1,0 +1,380 @@
+[
+{
+"project": "anthropic",
+"text": "List available Anthropic courses/certs and pick a target",
+"ord": 10,
+"done": false,
+"done_at": null
+},
+{
+"project": "anthropic",
+"text": "Set completion date",
+"ord": 20,
+"done": false,
+"done_at": null
+},
+{
+"project": "anthropic",
+"text": "Complete course modules (1 per session)",
+"ord": 30,
+"done": false,
+"done_at": null
+},
+{
+"project": "anthropic",
+"text": "Take certification",
+"ord": 40,
+"done": false,
+"done_at": null
+},
+{
+"project": "anthropic",
+"text": "Add to resume and LinkedIn",
+"ord": 50,
+"done": false,
+"done_at": null
+},
+{
+"project": "catalogue",
+"text": "Decide selling name: Merkitt",
+"ord": 5,
+"done": true,
+"done_at": "2026-10-15T04:12:00Z"
+},
+{
+"project": "catalogue",
+"text": "Pick 15–25 products",
+"ord": 10,
+"done": false,
+"done_at": null
+},
+{
+"project": "catalogue",
+"text": "Get supplier prices, MOQs, lead times (deliver before mid-Dec)",
+"ord": 20,
+"done": false,
+"done_at": null
+},
+{
+"project": "catalogue",
+"text": "Set pricing tiers (e.g. 50 / 100 / 500 pcs)",
+"ord": 30,
+"done": false,
+"done_at": null
+},
+{
+"project": "catalogue",
+"text": "Design catalogue (PDF + one-page price sheet)",
+"ord": 40,
+"done": false,
+"done_at": null
+},
+{
+"project": "catalogue",
+"text": "List 30 target companies / HR & admin contacts",
+"ord": 50,
+"done": false,
+"done_at": null
+},
+{
+"project": "catalogue",
+"text": "Send catalogue; follow up after 3 days",
+"ord": 60,
+"done": false,
+"done_at": null
+},
+{
+"project": "company",
+"text": "Ask law firm for status and expected timeline",
+"ord": 10,
+"done": false,
+"done_at": null
+},
+{
+"project": "company",
+"text": "Confirm which name (Merkitt / Treebrix / Mercuo) is approved",
+"ord": 20,
+"done": false,
+"done_at": null
+},
+{
+"project": "company",
+"text": "Track remaining steps: SEC → Mayor's permit → BIR → bank account",
+"ord": 30,
+"done": false,
+"done_at": null
+},
+{
+"project": "company",
+"text": "Prepare for BIR: books, invoices/receipts",
+"ord": 40,
+"done": false,
+"done_at": null
+},
+{
+"project": "coaching",
+"text": "Register for TPI Level 1 (check date and fee)",
+"ord": 10,
+"done": false,
+"done_at": null
+},
+{
+"project": "coaching",
+"text": "Curriculum: define beginner outcomes",
+"ord": 20,
+"done": false,
+"done_at": null
+},
+{
+"project": "coaching",
+"text": "Curriculum: outline lessons (grip/setup → putting → chipping → full swing → on-course)",
+"ord": 30,
+"done": false,
+"done_at": null
+},
+{
+"project": "coaching",
+"text": "Curriculum: write drills and a progress checklist per lesson",
+"ord": 40,
+"done": false,
+"done_at": null
+},
+{
+"project": "coaching",
+"text": "Define beginner package (sessions, length, price)",
+"ord": 50,
+"done": false,
+"done_at": null
+},
+{
+"project": "coaching",
+"text": "Find a range to teach at",
+"ord": 60,
+"done": false,
+"done_at": null
+},
+{
+"project": "coaching",
+"text": "Coach 2–3 friends free for practice and testimonials",
+"ord": 70,
+"done": false,
+"done_at": null
+},
+{
+"project": "coaching",
+"text": "Create simple booking post / page",
+"ord": 80,
+"done": false,
+"done_at": null
+},
+{
+"project": "job",
+"text": "Finish 2 remaining coach edits on resume",
+"ord": 10,
+"done": false,
+"done_at": null
+},
+{
+"project": "job",
+"text": "Update cover letter and LinkedIn with new metrics",
+"ord": 20,
+"done": false,
+"done_at": null
+},
+{
+"project": "job",
+"text": "Confirm HP and ITRAC appear on LinkedIn",
+"ord": 30,
+"done": false,
+"done_at": null
+},
+{
+"project": "job",
+"text": "Check level of the Production Engineering Team Lead role",
+"ord": 40,
+"done": false,
+"done_at": null
+},
+{
+"project": "job",
+"text": "Set weekly target: 5 applications + 3 outreach messages",
+"ord": 50,
+"done": false,
+"done_at": null
+},
+{
+"project": "job",
+"text": "Complete Director of Infrastructure mock interview",
+"ord": 60,
+"done": false,
+"done_at": null
+},
+{
+"project": "oned",
+"text": "Define scope: which comes first (golf balls, other equipment, or apparel)",
+"ord": 10,
+"done": false,
+"done_at": null
+},
+{
+"project": "oned",
+"text": "Golf balls: resume 1688 supplier shortlist under the ONED brand",
+"ord": 20,
+"done": false,
+"done_at": null
+},
+{
+"project": "oned",
+"text": "Check ONED name: IPOPHL trademark search, domain, social handles",
+"ord": 30,
+"done": false,
+"done_at": null
+},
+{
+"project": "oned",
+"text": "Research competitors and price points in PH",
+"ord": 40,
+"done": false,
+"done_at": null
+},
+{
+"project": "oned",
+"text": "Shortlist suppliers; request samples",
+"ord": 50,
+"done": false,
+"done_at": null
+},
+{
+"project": "oned",
+"text": "Set startup budget and target launch date",
+"ord": 60,
+"done": false,
+"done_at": null
+},
+{
+"project": "oned",
+"text": "Decide sales channel (online, pro shops, golf clubs, events)",
+"ord": 70,
+"done": false,
+"done_at": null
+},
+{
+"project": "simulator",
+"text": "Visit 2 existing simulator venues in Metro Manila",
+"ord": 10,
+"done": false,
+"done_at": null
+},
+{
+"project": "simulator",
+"text": "Get equipment quotes (simulator, screen, enclosure)",
+"ord": 20,
+"done": false,
+"done_at": null
+},
+{
+"project": "simulator",
+"text": "Estimate space, rent, and startup cost",
+"ord": 30,
+"done": false,
+"done_at": null
+},
+{
+"project": "simulator",
+"text": "Rough revenue estimate (hourly rate × bookings)",
+"ord": 40,
+"done": false,
+"done_at": null
+},
+{
+"project": "simulator",
+"text": "Decide: go / wait / combine with coaching",
+"ord": 50,
+"done": false,
+"done_at": null
+},
+{
+"project": "vive",
+"text": "Sit down with Candy: relaunch goals, products, budget, target date",
+"ord": 10,
+"done": false,
+"done_at": null
+},
+{
+"project": "vive",
+"text": "Check old domain, hosting, social accounts. Still active?",
+"ord": 20,
+"done": false,
+"done_at": null
+},
+{
+"project": "vive",
+"text": "List what changed since it went on hold",
+"ord": 30,
+"done": false,
+"done_at": null
+},
+{
+"project": "vive",
+"text": "Define relaunch offer",
+"ord": 40,
+"done": false,
+"done_at": null
+},
+{
+"project": "vive",
+"text": "Rebuild/refresh website",
+"ord": 50,
+"done": false,
+"done_at": null
+},
+{
+"project": "vive",
+"text": "Plan launch posts (2 weeks)",
+"ord": 60,
+"done": false,
+"done_at": null
+},
+{
+"project": "vive",
+"text": "Relaunch",
+"ord": 70,
+"done": false,
+"done_at": null
+},
+{
+"project": "website",
+"text": "Write site outline (Home, Services, About, Contact)",
+"ord": 10,
+"done": false,
+"done_at": null
+},
+{
+"project": "website",
+"text": "Write page content",
+"ord": 20,
+"done": false,
+"done_at": null
+},
+{
+"project": "website",
+"text": "Check domain availability for all 3 candidate names",
+"ord": 30,
+"done": false,
+"done_at": null
+},
+{
+"project": "website",
+"text": "Build draft site",
+"ord": 40,
+"done": false,
+"done_at": null
+},
+{
+"project": "website",
+"text": "Buy domain + publish once name is approved",
+"ord": 50,
+"done": false,
+"done_at": null
+}
+]

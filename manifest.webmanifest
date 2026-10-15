@@ -1,0 +1,15 @@
+{
+  "name": "Tee Sheet",
+  "short_name": "Tee Sheet",
+  "description": "Carlo's Mon–Fri time-block planner.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f6f2",
+  "theme_color": "#1d6a47",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
