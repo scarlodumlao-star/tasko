@@ -23,3 +23,8 @@ Carlo's Mon–Fri time-block planner. Installable app (PWA) for phone and laptop
 
 ## Changing the schedule
 The weekly blocks live in the `SCHED` section near the top of the script in `index.html`.
+
+## Projects and schedule
+Projects live in the `projects` table and each weekday's three project blocks (11:00, 1:00, 3:15) in the `days` table.
+- In the app: Projects → **+ New project**; Week → **Edit schedule**.
+- From Claude: with the Supabase connector, ask in any chat ("New project: … put it on Wednesday 1 PM").

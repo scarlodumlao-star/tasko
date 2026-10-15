@@ -160,40 +160,46 @@ footer{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:sp
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 /* ---------- schedule ---------- */
-const PROJECTS={
-  job:{name:"Job Search"},
-  catalogue:{name:"Giveaway Catalogue",note:"Merkitt"},
-  vive:{name:"Vive Manila",note:"Relaunch + website"},
-  coaching:{name:"Golf Coaching",note:"Curriculum + TPI"},
-  company:{name:"Company Registration",note:"Law firm"},
-  website:{name:"Company Website"},
-  anthropic:{name:"Anthropic Training"},
-  oned:{name:"ONED",note:"Golf equipment, apparel, balls"},
-  simulator:{name:"Indoor Golf Simulator",note:"Research"}
-};
-const ORDER=["job","catalogue","vive","coaching","company","website","anthropic","oned","simulator"];
+// Projects and each day's three project blocks live in the database (tables `projects` and `days`).
+// These defaults are only used until the data loads, and to set up a brand-new account.
+const DEFAULT_PROJECTS=[
+  ["job","Job Search",""],["catalogue","Giveaway Catalogue","Merkitt"],["vive","Vive Manila","Relaunch + website"],
+  ["coaching","Golf Coaching","Curriculum + TPI"],["company","Company Registration","Law firm"],["website","Company Website",""],
+  ["anthropic","Anthropic Training",""],["oned","ONED","Golf equipment, apparel, balls"],["simulator","Indoor Golf Simulator","Research"]
+].map(([key,name,note],i)=>({key,name,note,sort:(i+1)*10,active:true}));
+const DEFAULT_DAYS=[
+  {dow:1,theme:"Website day",slots:[{project:"website",label:"Company Website"},{project:"website",label:"Company Website"},{project:"vive",label:"Vive Manila Website"}]},
+  {dow:2,theme:"Merkitt day",slots:[{project:"company",label:"Company Registration (law firm)"},{project:"catalogue",label:"Giveaway Catalogue"},{project:"catalogue",label:"Giveaway Catalogue (outreach)"}]},
+  {dow:3,theme:"Golf day",slots:[{project:"coaching",label:"Golf Coaching"},{project:"oned",label:"ONED"},{project:"simulator",label:"Indoor Simulator"}]},
+  {dow:4,theme:"Vive Manila day",slots:[{project:"vive",label:"Vive Manila relaunch planning"},{project:"vive",label:"Vive Manila Website"},{project:"vive",label:"Vive Manila marketing"}]},
+  {dow:5,theme:"Learn & Coaching day",slots:[{project:"anthropic",label:"Anthropic Training"},{project:"coaching",label:"Golf Coaching Curriculum"},{project:"anthropic",label:"Flex",flex:true}]}
+];
+const SLOT_TIMES=["11:00","13:00","15:15"];
 const END=17*60;
-function day(theme,x,xl,y,yl,z,zl,fri){
+let PROJECTS={}, ORDER=[], SCHED={};
+function buildDay(theme,slots,dow){
+  const s=i=>slots[i]||{project:"",label:"Open block"};
+  const blk=(t,i)=>({t,label:s(i).label||PROJECTS[s(i).project]?.name||"Open block",p:s(i).project||null,kind:s(i).flex?"flex":undefined,slot:i});
   return {theme,blocks:[
     {t:"09:00",label:"Plan the day",kind:"ritual",note:"Check Inbox and Waiting. Read today's blocks."},
     {t:"09:15",label:"Job Search",p:"job"},
     {t:"10:45",label:"Break",kind:"rest"},
-    {t:"11:00",label:xl,p:x},
+    blk("11:00",0),
     {t:"12:00",label:"Lunch",kind:"rest"},
-    {t:"13:00",label:yl,p:y},
+    blk("13:00",1),
     {t:"15:00",label:"Break",kind:"rest"},
-    {t:"15:15",label:zl,p:z,kind:fri?"flex":undefined},
-    fri?{t:"16:30",label:"Weekly Review",kind:"review"}
+    blk("15:15",2),
+    dow===5?{t:"16:30",label:"Weekly Review",kind:"review"}
        :{t:"16:30",label:"Log done / set next",kind:"ritual",note:"Process the Inbox. Tick what's done."}
   ]};
 }
-const SCHED={
-  1:day("Website day","website","Company Website","website","Company Website","vive","Vive Manila Website"),
-  2:day("Merkitt day","company","Company Registration (law firm)","catalogue","Giveaway Catalogue","catalogue","Giveaway Catalogue (outreach)"),
-  3:day("Golf day","coaching","Golf Coaching","oned","ONED","simulator","Indoor Simulator"),
-  4:day("Vive Manila day","vive","Vive Manila relaunch planning","vive","Vive Manila Website","vive","Vive Manila marketing"),
-  5:day("Learn & Coaching day","anthropic","Anthropic Training","coaching","Golf Coaching Curriculum","anthropic","Flex",true)
-};
+function rebuild(projects,days){
+  PROJECTS={};for(const p of projects)PROJECTS[p.key]={name:p.name,note:p.note,active:p.active,sort:p.sort};
+  ORDER=projects.filter(p=>p.active).sort((a,b)=>a.sort-b.sort).map(p=>p.key);
+  SCHED={};for(const d of days)SCHED[d.dow]=buildDay(d.theme,d.slots||[],d.dow);
+  for(const d of DEFAULT_DAYS)if(!SCHED[d.dow])SCHED[d.dow]=buildDay(d.theme,d.slots,d.dow);
+}
+rebuild(DEFAULT_PROJECTS,DEFAULT_DAYS);
 const DOW=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const toMin=s=>{const [h,m]=s.split(":").map(Number);return h*60+m};
 const fmt=m=>{const h=Math.floor(m/60),mm=m%60;return (((h+11)%12)+1)+":"+String(mm).padStart(2,"0")};
@@ -216,7 +222,8 @@ function blockState(t=manila()){
 const CFG=window.TEE_CONFIG||{};
 const configured=CFG.SUPABASE_URL&&!CFG.SUPABASE_URL.includes("YOUR-")&&window.supabase;
 const sb=configured?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true}}):null;
-const S={tasks:[],inbox:[],waiting:[],someday:[],loaded:false};
+const S={tasks:[],inbox:[],waiting:[],someday:[],projects:[],days:[],loaded:false};
+let seeding=false, editSched=false;
 let session=null, tab="today", chime=false, lastBlockKey=null, switchMsg="";
 try{tab=localStorage.getItem("tee-tab")||"today";chime=localStorage.getItem("tee-chime")==="1"}catch(e){}
 
@@ -241,10 +248,17 @@ const maxOrd=p=>tasksOf(p).reduce((m,t)=>Math.max(m,t.ord||0),0);
 /* ---------- data ---------- */
 async function load(){
   if(!sb||!session)return;
-  const [t,i,w,s]=await Promise.all(["tasks","inbox","waiting","someday"].map(n=>sb.from(n).select("*").order("created_at")));
-  const err=[t,i,w,s].find(r=>r.error);
+  const [t,i,w,s,p,d]=await Promise.all([...["tasks","inbox","waiting","someday","projects"].map(n=>sb.from(n).select("*").order("created_at")),sb.from("days").select("*").order("dow")]);
+  const err=[t,i,w,s,p,d].find(r=>r.error);
   if(err){toast(navigator.onLine?"Couldn't load tasks: "+err.error.message:"You're offline. Showing the last loaded tasks.");return}
-  S.tasks=t.data;S.inbox=i.data;S.waiting=w.data;S.someday=s.data;S.loaded=true;
+  // A brand-new account gets the default projects and schedule.
+  if(!p.data.length&&!seeding){seeding=true;
+    await sb.from("projects").insert(DEFAULT_PROJECTS);
+    if(!d.data.length)await sb.from("days").insert(DEFAULT_DAYS);
+    seeding=false;return load();
+  }
+  S.tasks=t.data;S.inbox=i.data;S.waiting=w.data;S.someday=s.data;S.projects=p.data;S.days=d.data;S.loaded=true;
+  rebuild(S.projects,S.days);
   safeRender();
 }
 let loadTimer=null;
@@ -277,6 +291,17 @@ const A={
   addSomeday:text=>run(sb.from("someday").insert({text})),
   promote:async(s,project)=>{if(await run(sb.from("tasks").insert({project,text:s.text,ord:maxOrd(project)+10})))await run(sb.from("someday").delete().eq("id",s.id))},
   delSomeday:s=>run(sb.from("someday").delete().eq("id",s.id)),
+  addProject:async(name,note,tasks)=>{
+    let key=name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,30)||"project";
+    const taken=new Set(S.projects.map(p=>p.key));let k=key,n=2;while(taken.has(k))k=key+"-"+n++;
+    const sort=Math.max(0,...S.projects.map(p=>p.sort))+10;
+    if(!await run(sb.from("projects").insert({key:k,name,note,sort})))return;
+    if(tasks.length)await run(sb.from("tasks").insert(tasks.map((text,i)=>({project:k,text,ord:(i+1)*10}))));
+    toast(`Added ${name}. Give it a block in Week → Edit schedule.`);
+  },
+  archiveProject:key=>run(sb.from("projects").update({active:false}).eq("key",key)),
+  restoreProject:key=>run(sb.from("projects").update({active:true}).eq("key",key)),
+  saveDay:(dow,patch)=>run(sb.from("days").upsert({user_id:session.user.id,dow,theme:SCHED[dow]?.theme||"",slots:(S.days.find(d=>d.dow===dow)||{}).slots||[],...patch})),
   seed:async()=>{
     const rows=await fetch("seed.json").then(r=>r.json());
     if(await run(sb.from("tasks").insert(rows)))
@@ -314,7 +339,7 @@ function renderNow(){
   if(switchMsg)box.append(h("div",{class:"switch",role:"status"},switchMsg,"  ",h("button",{class:"ghost",onclick:()=>{switchMsg="";renderNow()}},"Got it")));
   // Outside work hours: preview the next workday's projects.
   const preview=d=>{const ps=[...new Set(SCHED[d].blocks.filter(b=>b.p&&b.p!=="job"&&b.kind!=="flex").map(b=>b.p))];
-    return h("p",{class:"hint"},`${DOW[d]} — ${SCHED[d].theme}: Job Search, then ${ps.map(p=>PROJECTS[p].name).join(", ")}${SCHED[d].blocks.some(b=>b.kind==="flex")?", Flex":""}.`)};
+    return h("p",{class:"hint"},`${DOW[d]} — ${SCHED[d].theme}: Job Search, then ${ps.map(p=>PROJECTS[p]?.name||p).join(", ")}${SCHED[d].blocks.some(b=>b.kind==="flex")?", Flex":""}.`)};
   if(st.weekend){box.append(h("div",{class:"label"},"Now"),h("h2",{},"Weekend"),preview(nextWorkday(t.dow)));return}
   if(st.before){box.append(h("div",{class:"label"},"Before work"),h("h2",{},"Day starts at 9:00 AM"),preview(t.dow));return}
   if(st.after){box.append(h("div",{class:"label"},"After hours"),h("h2",{},"Done for today"),h("p",{class:"hint"},"Errands go here. Capture anything new in the Inbox."),h("div",{class:"label"},"Next workday"),preview(nextWorkday(t.dow)));return}
@@ -380,16 +405,56 @@ function viewWeek(){
     return h("td",{class:cls},b.label,n?h("span",{class:"nt"},"▶ "+n.text):null);
   };
   const body=h("tbody",{},rows.map(i=>h("tr",{},h("td",{class:"time"},fmt(toMin(SCHED[1].blocks[i].t))),days.map(d=>cell(d,i)))));
-  return [h("p",{class:"hint",style:"margin-bottom:8px"},"Each project block shows its current ▶ next task."),
+  const toggle=h("button",{class:editSched?"primary":"",onclick:()=>{editSched=!editSched;render()}},editSched?"Done editing":"Edit schedule");
+  if(editSched)return [h("div",{class:"acts",style:"justify-content:space-between;margin-bottom:8px"},h("span",{class:"hint"},"Job Search, breaks and the daily rituals stay fixed. Changes save as you go."),toggle),...scheduleEditor()];
+  return [h("div",{class:"acts",style:"justify-content:space-between;margin-bottom:8px"},h("span",{class:"hint"},"Each project block shows its current ▶ next task."),toggle),
     h("div",{class:"weekwrap"},h("table",{class:"week"},head,body))];
+}
+function scheduleEditor(){
+  return [1,2,3,4,5].map(dow=>{
+    const row=S.days.find(d=>d.dow===dow)||DEFAULT_DAYS.find(d=>d.dow===dow);
+    const slots=[0,1,2].map(i=>({...(row.slots[i]||{project:"",label:""})}));
+    const save=()=>A.saveDay(dow,{slots});
+    const theme=h("input",{type:"text",id:"th-"+dow,value:row.theme,"aria-label":DOW[dow]+" theme",onchange:e=>A.saveDay(dow,{theme:e.target.value.trim()})});
+    return h("section",{class:"proj"},
+      h("h3",{},DOW[dow]),
+      h("label",{class:"acts"},h("span",{class:"hint",style:"width:4.5em"},"Theme"),theme),
+      slots.map((s,i)=>{
+        const sel=h("select",{id:`sl-${dow}-${i}`,"aria-label":`${DOW[dow]} ${SLOT_TIMES[i]} project`,onchange:e=>{
+            const v=e.target.value;
+            if(v==="__flex"){s.flex=true;s.project="anthropic";s.label="Flex"}
+            else{delete s.flex;s.project=v;s.label=v?PROJECTS[v].name:""}
+            save();
+          }},
+          h("option",{value:""},"— Open block —"),
+          ORDER.filter(p=>p!=="job").map(p=>h("option",{value:p,selected:!s.flex&&s.project===p?true:null},PROJECTS[p].name)),
+          h("option",{value:"__flex",selected:s.flex?true:null},"Flex (bumped work / errands)"));
+        const lbl=h("input",{type:"text",id:`lb-${dow}-${i}`,value:s.label||"",placeholder:"Block label","aria-label":`${DOW[dow]} ${SLOT_TIMES[i]} label`,onchange:e=>{s.label=e.target.value.trim();save()}});
+        return h("div",{class:"item"},h("span",{class:"tee"},fmt(toMin(SLOT_TIMES[i]))),sel,lbl);
+      }));
+  });
 }
 function viewProjects(){
   if(S.loaded&&!S.tasks.length)return [h("div",{class:"card"},h("p",{class:"hint"},"No tasks yet. Load the starter list from your plan?"),h("p",{},h("button",{class:"primary",onclick:e=>{e.target.disabled=true;A.seed()}},"Load my starter tasks")))];
-  return ORDER.map(p=>{
+  const pn=h("input",{type:"text",id:"np-name",placeholder:"Project name",required:true});
+  const pnote=h("input",{type:"text",id:"np-note",placeholder:"Short note (optional)"});
+  const ptasks=h("textarea",{id:"np-tasks",rows:"4",placeholder:"Tasks, one per line (first line becomes ▶ next)",style:"width:100%;font:inherit;background:var(--surface);color:inherit;border:1px solid var(--line);border-radius:8px;padding:7px 10px"});
+  const newCard=h("details",{class:"card"},h("summary",{style:"cursor:pointer;font-weight:600"},"+ New project"),
+    h("form",{style:"display:flex;flex-direction:column;gap:8px;margin-top:10px",onsubmit:e=>{e.preventDefault();const name=pn.value.trim();if(!name)return;
+      A.addProject(name,pnote.value.trim(),ptasks.value.split("\n").map(x=>x.trim()).filter(Boolean));pn.value="";pnote.value="";ptasks.value="";}},
+      pn,pnote,ptasks,h("div",{},h("button",{class:"primary",type:"submit"},"Add project"))));
+  const archived=S.projects.filter(p=>!p.active);
+  const archCard=archived.length?h("details",{class:"card",style:"margin-top:14px"},h("summary",{style:"cursor:pointer"},`Archived projects (${archived.length})`),
+    h("div",{class:"list"},archived.map(p=>h("div",{class:"item"},h("div",{class:"txt"},p.name),h("button",{onclick:()=>A.restoreProject(p.key)},"Restore"))))):null;
+  return [newCard,...ORDER.map(p=>{
     const list=tasksOf(p), open=list.filter(t=>!t.done), done=list.filter(t=>t.done), n=open[0];
     const inp=h("input",{type:"text",id:"add-"+p,placeholder:"Add a task","aria-label":"Add task to "+PROJECTS[p].name});
+    const used=[1,2,3,4,5].some(d=>SCHED[d].blocks.some(b=>b.p===p&&b.kind!=="flex"));
     return h("section",{class:"proj"},
-      h("h3",{},PROJECTS[p].name,PROJECTS[p].note?h("small",{},PROJECTS[p].note):null,h("small",{},`${open.length} open · ${done.length} done`)),
+      h("h3",{},PROJECTS[p].name,PROJECTS[p].note?h("small",{},PROJECTS[p].note):null,h("small",{},`${open.length} open · ${done.length} done`),
+        !used&&p!=="job"?h("small",{class:"over"},"not scheduled"):null,
+        p!=="job"?h("button",{class:"ghost",style:"margin-left:auto",title:"Archive project",onclick:e=>{
+          if(e.target.dataset.armed){A.archiveProject(p)}else{e.target.dataset.armed="1";e.target.textContent="Confirm archive"}}},"Archive"):null),
       h("div",{class:"list"},open.length?open.map((t,i)=>h("div",{class:`item${t===n?" isnext":""}`},
         h("input",{type:"checkbox",id:"c-"+t.id,"aria-label":"Mark done",onchange:()=>A.toggle(t)}),
         h("label",{class:"txt",for:"c-"+t.id},t.text),
@@ -399,7 +464,7 @@ function viewProjects(){
           h("button",{class:"ghost","aria-label":"Move down",disabled:i===open.length-1||null,onclick:()=>A.move(t,1)},"↓"),
           h("button",{class:"ghost","aria-label":"Delete task",onclick:()=>A.delTask(t)},"✕")))):h("p",{class:"empty"},"No open tasks.")),
       h("form",{class:"add",onsubmit:e=>{e.preventDefault();const v=inp.value.trim();if(v){A.addTask(p,v);inp.value=""}}},inp,h("button",{type:"submit"},"Add")));
-  });
+  }),archCard];
 }
 function viewInbox(){
   if(!S.inbox.length)return [h("p",{class:"empty"},"Inbox is clear. Capture new ideas, tasks and blockers with the bar above.")];
@@ -453,7 +518,7 @@ function render(){
   const v=$("#view");v.replaceChildren();
   if(!S.loaded){v.append(h("p",{class:"empty"},"Loading your tasks…"));return}
   const fn={today:viewToday,week:viewWeek,projects:viewProjects,inbox:viewInbox,waiting:viewWaiting,someday:viewSomeday,done:viewDone}[tab]||viewToday;
-  v.append(...[fn()].flat(2));
+  v.append(...[fn()].flat(3).filter(Boolean));
 }
 // Avoid wiping a half-typed entry when data refreshes.
 function safeRender(){
@@ -486,7 +551,7 @@ function showApp(){
   render();load();
   if(!channel){
     channel=sb.channel("tee-sheet");
-    for(const tbl of ["tasks","inbox","waiting","someday"])channel.on("postgres_changes",{event:"*",schema:"public",table:tbl},reload);
+    for(const tbl of ["tasks","inbox","waiting","someday","projects","days"])channel.on("postgres_changes",{event:"*",schema:"public",table:tbl},reload);
     channel.subscribe();
   }
 }
