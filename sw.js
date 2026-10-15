@@ -1,5 +1,5 @@
 // Caches the app shell so Tee Sheet opens instantly and offline. Data always comes from Supabase.
-const CACHE = "tee-sheet-v6";
+const CACHE = "tee-sheet-v7";
 const SHELL = [
   "./", "./index.html", "./config.js", "./seed.json", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./icons/favicon-32.png",

@@ -67,3 +67,7 @@ alter table public.day_overrides enable row level security;
 drop policy if exists own_rows on public.day_overrides;
 create policy own_rows on public.day_overrides for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 alter publication supabase_realtime add table public.day_overrides;
+
+-- Skip a day: the day goes off, and the projects moved to Friday's Flex are recorded so Undo can take them back.
+alter table public.day_overrides add column if not exists off boolean not null default false;
+alter table public.day_overrides add column if not exists moved jsonb not null default '[]'::jsonb;
