@@ -183,6 +183,9 @@ const DEFAULT_PROJECTS=[
   ["coaching","Golf Coaching","Curriculum + TPI"],["company","Company Registration","Law firm"],["website","Company Website",""],
   ["anthropic","Anthropic Training",""],["oned","ONED","Golf equipment, apparel, balls"],["simulator","Indoor Golf Simulator","Research"]
 ].map(([key,name,note],i)=>({key,name,note,sort:(i+1)*10,active:true}));
+// Built-in category for tasks that belong to no project (car maintenance, bank, government offices). Always listed last.
+const PERSONAL="personal";
+DEFAULT_PROJECTS.push({key:PERSONAL,name:"Personal & Errands",note:"Not tied to a project",sort:1000,active:true});
 const DEFAULT_DAYS=[
   {dow:1,theme:"Website day",slots:[{project:"website",label:"Company Website"},{project:"website",label:"Company Website"},{project:"vive",label:"Vive Manila Website"}]},
   {dow:2,theme:"Merkitt day",slots:[{project:"company",label:"Company Registration (law firm)"},{project:"catalogue",label:"Giveaway Catalogue"},{project:"catalogue",label:"Giveaway Catalogue (outreach)"}]},
@@ -237,7 +240,7 @@ const overOf=dow=>(S.over||[]).find(o=>o.date===WEEK[dow]);
 function effRow(dow){const b=baseRow(dow),o=overOf(dow);return {theme:o?.theme??b.theme,slots:o?.slots??b.slots??[],times:{...(b.times||{}),...(o?.times||{})},off:!!o?.off,moved:o?.moved||[]}}
 function rebuild(projects,days,overrides){
   PROJECTS={};for(const p of projects)PROJECTS[p.key]={name:p.name,note:p.note,active:p.active,sort:p.sort};
-  ORDER=projects.filter(p=>p.active).sort((a,b)=>a.sort-b.sort).map(p=>p.key);
+  ORDER=projects.filter(p=>p.active).sort((a,b)=>(a.key===PERSONAL)-(b.key===PERSONAL)||a.sort-b.sort).map(p=>p.key);
   WEEK=weekDates();WEEK_KEY=WEEK[1];
   BASE={};SCHED={};
   for(let dow=1;dow<=5;dow++){
@@ -344,7 +347,7 @@ const A={
   addProject:async(name,note,tasks)=>{
     let key=name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,30)||"project";
     const taken=new Set(S.projects.map(p=>p.key));let k=key,n=2;while(taken.has(k))k=key+"-"+n++;
-    const sort=Math.max(0,...S.projects.map(p=>p.sort))+10;
+    const sort=Math.max(0,...S.projects.filter(p=>p.key!==PERSONAL).map(p=>p.sort))+10;
     if(!await run(sb.from("projects").insert({key:k,name,note,sort})))return;
     if(tasks.length)await run(sb.from("tasks").insert(tasks.map((text,i)=>({project:k,text,ord:(i+1)*10}))));
     toast(`Added ${name}. Give it a block in Week → Edit schedule.`);
@@ -426,6 +429,7 @@ function renderNow(){
     h("h2",{},c.label),
     h("div",{class:"bar"},h("i",{style:`width:${pct.toFixed(1)}%`})));
   if(c.kind==="flex")box.append(c.bumped?catchUp(c.bumped):h("p",{class:"hint"},"Bumped work or a work-hour errand goes here. Nothing bumped? Anthropic Training."));
+  if(c.kind==="flex"){const e=nextOf(PERSONAL);if(e)box.append(h("p",{class:"hint"},"Errand ▶ "+e.text))}
   if(c.note)box.append(h("p",{class:"hint"},c.note));
   if(c.kind==="review")box.append(h("p",{class:"hint"},"Open the Done tab for the review checklist."));
   if(c.p){
@@ -458,7 +462,7 @@ function blocksList(bl,mins){
       h("div",{class:"tee"},fmt(b.start)),
       h("div",{class:"b"},h("div",{class:"t"},b.label,b.changed?h("span",{class:"tag"},"changed"):null),
         b.p&&b.kind!=="flex"?h("div",{class:"s"},n?"▶ "+n.text:"No open tasks"):null,
-        b.kind==="flex"?(b.bumped?catchUp(b.bumped):h("div",{class:"s"},"Bumped work, errands, or Anthropic Training")):null));
+        b.kind==="flex"?(b.bumped?catchUp(b.bumped):h("div",{class:"s"},"Bumped work, errands, or Anthropic Training",nextOf(PERSONAL)?" · Errand ▶ "+nextOf(PERSONAL).text:"")):null));
   });
 }
 // The next workday after today (Mon–Fri).
@@ -602,8 +606,8 @@ function viewProjects(){
     const toggle=()=>{isOpen?OPENP.delete(p):OPENP.add(p);try{localStorage.setItem("tee-openp",JSON.stringify([...OPENP]))}catch(e){};render()};
     return h("section",{class:"proj"+(isOpen?" open":"")},
       h("h3",{class:"ph",role:"button",tabindex:"0","aria-expanded":String(isOpen),onclick:toggle,onkeydown:e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle()}}},h("span",{class:"chev","aria-hidden":"true"},"▸"),PROJECTS[p].name,PROJECTS[p].note?h("small",{},PROJECTS[p].note):null,h("small",{},`${open.length} open · ${done.length} done`),
-        !used&&p!=="job"?h("small",{class:"over"},"not scheduled"):null,
-        p!=="job"?h("button",{class:"ghost",style:"margin-left:auto",title:"Archive project",onclick:e=>{e.stopPropagation();
+        !used&&p!=="job"&&p!==PERSONAL?h("small",{class:"over"},"not scheduled"):null,
+        p!=="job"&&p!==PERSONAL?h("button",{class:"ghost",style:"margin-left:auto",title:"Archive project",onclick:e=>{e.stopPropagation();
           if(e.target.dataset.armed){A.archiveProject(p)}else{e.target.dataset.armed="1";e.target.textContent="Confirm archive"}}},"Archive"):null),
       !isOpen?(n?h("p",{class:"peek"},"▶ "+n.text):null):null,
       !isOpen?null:h("div",{class:"list"},open.length?open.map((t,i)=>h("div",{class:`item${t===n?" isnext":""}`},
