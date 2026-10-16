@@ -1,4 +1,4 @@
-# Tee Sheet
+# Tasko
 
 Carlo's Mon–Fri time-block planner. Installable app (PWA) for phone and laptop, synced through Supabase, hosted on GitHub Pages.
 

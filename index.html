@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Tee Sheet</title>
+<title>Tasko</title>
 <meta name="theme-color" content="#1d6a47">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Tee Sheet">
+<meta name="apple-mobile-web-app-title" content="Tasko">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
@@ -74,7 +74,7 @@ nav button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent
 .item.isnext .txt::before{content:"▶ ";color:var(--accent)}
 .item.done .txt{color:var(--muted);text-decoration:line-through}
 .acts{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
-.tee{font:500 .85rem var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);width:3.2em;flex:none}
+.slot-time{font:500 .85rem var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);width:3.2em;flex:none}
 .block{display:flex;gap:12px;padding:10px 6px;border-bottom:1px solid var(--line);align-items:flex-start}
 .block.cur{background:var(--accent-soft);border-radius:8px}
 .block.past{opacity:.55}
@@ -132,7 +132,7 @@ footer{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:sp
   <header>
     <div>
       <div class="theme" id="theme">—</div>
-      <h1>Tee Sheet</h1>
+      <h1>Tasko</h1>
     </div>
     <div class="clock" id="clock">--:--</div>
   </header>
@@ -272,13 +272,13 @@ function blockState(t=manila()){
 }
 
 /* ---------- state ---------- */
-const CFG=window.TEE_CONFIG||{};
+const CFG=window.TASKO_CONFIG||{};
 const configured=CFG.SUPABASE_URL&&!CFG.SUPABASE_URL.includes("YOUR-")&&window.supabase;
 const sb=configured?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true}}):null;
 const S={tasks:[],inbox:[],waiting:[],someday:[],projects:[],days:[],over:[],loaded:false};
 let seeding=false, editSched=false, editDay=null, skipAsk=null;
 let session=null, tab="today", chime=false, lastBlockKey=null, switchMsg="";
-try{tab=localStorage.getItem("tee-tab")||"today";chime=localStorage.getItem("tee-chime")==="1"}catch(e){}
+try{tab=(localStorage.getItem("tasko-tab")||localStorage.getItem("tee-tab"))||"today";chime=(localStorage.getItem("tasko-chime")||localStorage.getItem("tee-chime"))==="1"}catch(e){}
 
 const $=s=>document.querySelector(s);
 function h(tag,attrs,...kids){
@@ -440,7 +440,7 @@ function renderNow(){
   }
   if(st.next)box.append(h("div",{class:"upnext"},`Up next at ${fmt(st.next.start)}: ${st.next.label}`));
   box.append(h("div",{class:"acts"},
-    h("button",{class:"ghost",onclick:()=>{chime=!chime;try{localStorage.setItem("tee-chime",chime?"1":"0")}catch(e){};if(chime)beep();renderNow()}},chime?"🔔 Chime on":"🔕 Turn on chime"),
+    h("button",{class:"ghost",onclick:()=>{chime=!chime;try{localStorage.setItem("tasko-chime",chime?"1":"0")}catch(e){};if(chime)beep();renderNow()}},chime?"🔔 Chime on":"🔕 Turn on chime"),
     h("span",{class:"hint"},chime?"Plays at each switch while the app is open.":"")));
 }
 const TABS=[["today","Day"],["week","Week"],["projects","Projects"],["inbox","Inbox"],["waiting","Waiting"],["someday","Someday"],["done","Done"]];
@@ -448,7 +448,7 @@ function renderTabs(){
   const nav=$("#tabs");nav.replaceChildren();
   for(const [k,l] of TABS){
     const n=k==="inbox"?S.inbox.length:k==="waiting"?S.waiting.length:0;
-    nav.append(h("button",{role:"tab","aria-selected":String(tab===k),onclick:()=>{tab=k;try{localStorage.setItem("tee-tab",k)}catch(e){};render()}},l,n?h("span",{class:"count"},n):null));
+    nav.append(h("button",{role:"tab","aria-selected":String(tab===k),onclick:()=>{tab=k;try{localStorage.setItem("tasko-tab",k)}catch(e){};render()}},l,n?h("span",{class:"count"},n):null));
   }
 }
 function catchUp(list){
@@ -459,7 +459,7 @@ function blocksList(bl,mins){
   return bl.map(b=>{
     const cur=mins>=b.start&&mins<b.end, past=mins>=b.end, n=b.p?nextOf(b.p):null;
     return h("div",{class:`block${cur?" cur":""}${past?" past":""}${b.kind==="rest"?" rest":""}`},
-      h("div",{class:"tee"},fmt(b.start)),
+      h("div",{class:"slot-time"},fmt(b.start)),
       h("div",{class:"b"},h("div",{class:"t"},b.label,b.changed?h("span",{class:"tag"},"changed"):null),
         b.p&&b.kind!=="flex"?h("div",{class:"s"},n?"▶ "+n.text:"No open tasks"):null,
         b.kind==="flex"?(b.bumped?catchUp(b.bumped):h("div",{class:"s"},"Bumped work, errands, or Anthropic Training",nextOf(PERSONAL)?" · Errand ▶ "+nextOf(PERSONAL).text:"")):null));
@@ -578,14 +578,14 @@ function scheduleEditor(){
           ORDER.filter(p=>p!=="job").map(p=>h("option",{value:p,selected:!s.flex&&s.project===p?true:null},PROJECTS[p].name)),
           h("option",{value:"__flex",selected:s.flex?true:null},"Flex (bumped work / errands)"));
         const lbl=h("input",{type:"text",id:`lb-${dow}-${i}`,value:s.label||"",placeholder:"Block label","aria-label":`${DOW[dow]} ${SLOT_TIMES[i]} label`,onchange:e=>{s.label=e.target.value.trim();save()}});
-        return h("div",{class:"item"},h("span",{class:"tee"},fmt(toMin(T["s"+i]))),sel,lbl);
+        return h("div",{class:"item"},h("span",{class:"slot-time"},fmt(toMin(T["s"+i]))),sel,lbl);
       }),
       h("details",{},h("summary",{class:"hint",style:"cursor:pointer"},"Block times"),
         h("div",{class:"times"},TIME_KEYS.map(k=>h("label",{},TIME_LABELS[k],timeInput(`bt-${dow}-${k}`,T[k],`${DOW[dow]} ${TIME_LABELS[k]} time`,v=>{
           const n={...T,[k]:v};if(!timesOk(n)){toast("Times must stay in order, earliest first.");render();return}A.saveDay(dow,{times:n})}))))));
   });
 }
-let OPENP=new Set();try{OPENP=new Set(JSON.parse(localStorage.getItem("tee-openp")||"[]"))}catch(e){}
+let OPENP=new Set();try{OPENP=new Set(JSON.parse((localStorage.getItem("tasko-openp")||localStorage.getItem("tee-openp"))||"[]"))}catch(e){}
 function viewProjects(){
   if(S.loaded&&!S.tasks.length)return [h("div",{class:"card"},h("p",{class:"hint"},"No tasks yet. Load the starter list from your plan?"),h("p",{},h("button",{class:"primary",onclick:e=>{e.target.disabled=true;A.seed()}},"Load my starter tasks")))];
   const pn=h("input",{type:"text",id:"np-name",placeholder:"Project name",required:true});
@@ -603,7 +603,7 @@ function viewProjects(){
     const inp=h("input",{type:"text",id:"add-"+p,placeholder:"Add a task","aria-label":"Add task to "+PROJECTS[p].name});
     const used=[1,2,3,4,5].some(d=>BASE[d].blocks.some(b=>b.p===p&&b.kind!=="flex"));
     const isOpen=OPENP.has(p);
-    const toggle=()=>{isOpen?OPENP.delete(p):OPENP.add(p);try{localStorage.setItem("tee-openp",JSON.stringify([...OPENP]))}catch(e){};render()};
+    const toggle=()=>{isOpen?OPENP.delete(p):OPENP.add(p);try{localStorage.setItem("tasko-openp",JSON.stringify([...OPENP]))}catch(e){};render()};
     return h("section",{class:"proj"+(isOpen?" open":"")},
       h("h3",{class:"ph",role:"button",tabindex:"0","aria-expanded":String(isOpen),onclick:toggle,onkeydown:e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle()}}},h("span",{class:"chev","aria-hidden":"true"},"▸"),PROJECTS[p].name,PROJECTS[p].note?h("small",{},PROJECTS[p].note):null,h("small",{},`${open.length} open · ${done.length} done`),
         !used&&p!=="job"&&p!==PERSONAL?h("small",{class:"over"},"not scheduled"):null,
@@ -732,7 +732,7 @@ function showApp(){
   $("#who").textContent=session.user.email;
   render();load();
   if(!channel){
-    channel=sb.channel("tee-sheet");
+    channel=sb.channel("tasko");
     for(const tbl of ["tasks","inbox","waiting","someday","projects","days","day_overrides"])channel.on("postgres_changes",{event:"*",schema:"public",table:tbl},reload);
     channel.subscribe();
   }

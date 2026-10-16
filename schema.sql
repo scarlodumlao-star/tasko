@@ -1,4 +1,4 @@
--- Tee Sheet database setup. Run once in Supabase: SQL Editor -> New query -> paste -> Run.
+-- Tasko database setup. Run once in Supabase: SQL Editor -> New query -> paste -> Run.
 
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),

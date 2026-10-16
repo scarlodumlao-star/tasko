@@ -1,6 +1,6 @@
 {
-  "name": "Tee Sheet",
-  "short_name": "Tee Sheet",
+  "name": "Tasko",
+  "short_name": "Tasko",
   "description": "Carlo's Mon–Fri time-block planner.",
   "start_url": "./",
   "scope": "./",
