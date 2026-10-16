@@ -1,5 +1,5 @@
 // Caches the app shell so Tasko opens instantly and offline. Data always comes from Supabase.
-const CACHE = "tasko-v9";
+const CACHE = "tasko-v10";
 const SHELL = [
   "./", "./index.html", "./config.js", "./seed.json", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./icons/favicon-32.png",
